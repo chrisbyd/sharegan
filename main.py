@@ -28,9 +28,7 @@ sgan=SGAN(hparams=hparams)
 max_iter=int(mnist.train.num_examples*NUM_EPOCHES/BATCH_SIZE)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for iter in range(450):
-        if iter %SHOW_INTERVAL ==0:
-            samples=sgan.get_fake_image(sess)
+    for iter in range(1550):
         minibatch,_=mnist.train.next_batch(BATCH_SIZE)
         loss_d=sgan.train_Discriminator(sess,minibatch)
         loss_g=sgan.train_Generator(sess)
