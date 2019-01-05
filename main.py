@@ -11,6 +11,7 @@ NOISE_DIM=96
 NUM_EPOCHES=10
 PRINT_INTERVAL=50
 LEARNING_RATE=1e-3
+NUM_K=1
 
 def constructParams():
     return HParams(
@@ -28,10 +29,11 @@ sgan=SGAN(hparams=hparams)
 max_iter=int(mnist.train.num_examples*NUM_EPOCHES/BATCH_SIZE)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for iter in range(1550):
+    for iter in range(950):
         minibatch,_=mnist.train.next_batch(BATCH_SIZE)
         loss_d=sgan.train_Discriminator(sess,minibatch)
-        loss_g=sgan.train_Generator(sess)
+        for i in range(NUM_K):
+            loss_g=sgan.train_Generator(sess,minibatch)
         if iter % PRINT_INTERVAL==0:
             print('Iter:{},D:{:.4},G:{:.4}'.format(iter,loss_d,loss_g))
     print("final img")
