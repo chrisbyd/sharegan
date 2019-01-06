@@ -123,8 +123,7 @@ class WSGAN(object):
         eps = tf.random_uniform(shape=[self.HParams.batch_size, 1], minval=0, maxval=1)
         x_hat = self.Input_img + eps * (self.Input_fake_img - self.Input_img)
         # Gradients of Gradients is kind of tricky!
-        with tf.variable_scope('', reuse=True) as scope:
-            grad_D_x_hat = tf.gradients(self.discriminator(x_hat), x_hat)[0]
+        grad_D_x_hat = tf.gradients(self.discriminator(x_hat), x_hat)[0]
 
         grad_norm = tf.sqrt(tf.reduce_sum(tf.square(grad_D_x_hat), axis=1))
         grad_pen = lam * tf.reduce_mean((grad_norm - 1) ** 2)
