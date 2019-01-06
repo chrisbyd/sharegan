@@ -112,7 +112,7 @@ class WSGAN(object):
 
     def get_wganp_loss(self):
         D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
-        self.D_loss=tf.reduce_mean(self.logits_real)-tf.reduce_mean(self.logits_fake)
+        self.D_loss=-tf.reduce_mean(self.logits_real)+tf.reduce_mean(self.logits_fake)
         self.G_loss=-tf.reduce_mean(self.logits_fake)
         self.D_clip=[p.assign(tf.clip_by_value(p,-0.01,0.01)) for p in D_vars]
 
