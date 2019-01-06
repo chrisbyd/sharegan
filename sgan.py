@@ -74,7 +74,7 @@ class SGAN(object):
         a5 = tf.reshape(a4, [-1, 7, 7, 128])
         a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 14, 14, 64]) + b1_deconv)#[-1,14,14,64]
-        a6=a6+tf.layers.dropout(self.da2,0.3)
+        a6=a6+tf.layers.dropout(self.da2,0.5)
         a7 = tf.layers.batch_normalization(a6, training=True)
         a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a7, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a7)[0], 28, 28, 1]) + b2_deconv)

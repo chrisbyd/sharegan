@@ -24,12 +24,13 @@ def constructParams():
     )
 
 mnist=input_data.read_data_sets("./data/",one_hot=False)
+show_images(mnist.train.next_batch(16)[0])
 hparams=constructParams()
 sgan=SGAN(hparams=hparams)
 max_iter=int(mnist.train.num_examples*NUM_EPOCHES/BATCH_SIZE)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    for iter in range(1250):
+    for iter in range(950):
         minibatch,_=mnist.train.next_batch(BATCH_SIZE)
         loss_d=sgan.train_Discriminator(sess,minibatch)
         for i in range(NUM_K):
