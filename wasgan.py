@@ -26,11 +26,10 @@ class WSGAN(object):
             tf.get_variable("W2_deconv",shape=[4,4,1,64])
             tf.get_variable("b2_deconv",shape=1)
         self.logits_real = self.discriminator(preprocess_img(self.Input_img))
-        self.Input_fake_img = self.generator()
-
+        self.Input_fake_img = self.output_generator()
         self.logits_fake = self.discriminator(self.Input_fake_img)
         self.output_fake_img = self.output_generator()
-        self.get_wganp_loss()
+        self.get_wgan_loss_v2()
         self.get_optimizer()
         self.get_train_op()
 
@@ -112,9 +111,24 @@ class WSGAN(object):
 
     def get_wganp_loss(self):
         D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
-        self.D_loss=-tf.reduce_mean(self.logits_real)+tf.reduce_mean(self.logits_fake)
+        self.D_loss=tf.reduce_mean(self.logits_real)-tf.reduce_mean(self.logits_fake)
         self.G_loss=-tf.reduce_mean(self.logits_fake)
         self.D_clip=[p.assign(tf.clip_by_value(p,-0.01,0.01)) for p in D_vars]
+
+    def get_wgan_loss_v2(self):
+        self.G_loss = -tf.reduce_mean(self.logits_fake)
+        self.D_loss = tf.reduce_mean(self.logits_fake) - tf.reduce_mean(self.logits_real)
+        lam = 10
+        # random sample of batch_size (tf.random_uniform)
+        eps = tf.random_uniform(shape=[self.HParams.batch_size, 1], minval=0, maxval=1)
+        x_hat = self.Input_img + eps * (self.Input_fake_img - self.Input_img)
+        # Gradients of Gradients is kind of tricky!
+        with tf.variable_scope('', reuse=True) as scope:
+            grad_D_x_hat = tf.gradients(self.discriminator(x_hat), x_hat)[0]
+
+        grad_norm = tf.sqrt(tf.reduce_sum(tf.square(grad_D_x_hat), axis=1))
+        grad_pen = lam * tf.reduce_mean((grad_norm - 1) ** 2)
+        self.D_loss += grad_pen
 
 
 
