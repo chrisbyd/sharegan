@@ -39,7 +39,7 @@ class SGAN(object):
             W2_deconv=tf.get_variable("W2_deconv",shape=[4,4,1,64])
             b2_deconv=tf.get_variable("b2_deconv",shape=1)
         self.logits_real = self.discriminator(preprocess_img(self.Input_img))
-        self.Input_fake_img = self.output_generator()
+        self.Input_fake_img = self.generator()
 
         self.logits_fake = self.discriminator(self.Input_fake_img)
         # with tf.variable_scope("") as scope:
@@ -74,7 +74,7 @@ class SGAN(object):
         a5 = tf.reshape(a4, [-1, 7, 7, 128])
         a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 14, 14, 64]) + b1_deconv)#[-1,14,14,64]
-        a6=a6+self.da2
+        a6=a6+tf.layers.dropout(self.da2,0.3)
         a7 = tf.layers.batch_normalization(a6, training=True)
         a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a7, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a7)[0], 28, 28, 1]) + b2_deconv)
@@ -163,7 +163,7 @@ class SGAN(object):
         D_vars=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,'discriminator')
         G_vars=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,'generator')
         self.D_train_step=self.D_solver.minimize(self.D_loss,var_list=D_vars)
-        self.G_train_step=self.G_solver.minimize(self.G_loss)
+        self.G_train_step=self.G_solver.minimize(self.G_loss,var_list=G_vars)
 
     def train_Discriminator(self,sess,minibatch):
         _,d_loss_curr=sess.run([self.D_train_step,self.D_loss],feed_dict={self.Input_img:minibatch})
