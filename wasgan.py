@@ -1,40 +1,36 @@
 import tensorflow as tf
+from utility import *
 import numpy as np
-class SGAN(object):
+class WSGAN(object):
     def __init__(self,hparams):
         self.HParams=hparams
         self.Input_img=tf.placeholder(tf.float32,[self.HParams.batch_size,self.HParams.img_dim])
         self.Input_noise=self.sample_noise()
         with tf.variable_scope("discriminator"):
-            W1_conv=tf.get_variable("W1_conv",shape=[4,4,1,64])
-            b1_conv=tf.get_variable("b1_conv",shape=64)
-            W2_conv=tf.get_variable("W2_conv",shape=[4,4,64,128])
-            b2_conv=tf.get_variable("b2_conv",shape=128)
-            W1=tf.get_variable("W1",shape=[7*7*64,7*7*64])
-            b1=tf.get_variable("b1",shape=7*7*64)
-            W2=tf.get_variable("W2",shape=[7*7*64,1])
-            b2=tf.get_variable("b2",shape=1)
+            tf.get_variable("W1_conv",shape=[4,4,1,64])
+            tf.get_variable("b1_conv",shape=64)
+            tf.get_variable("W2_conv",shape=[4,4,64,128])
+            tf.get_variable("b2_conv",shape=128)
+            tf.get_variable("W1",shape=[7*7*64,7*7*64])
+            tf.get_variable("b1",shape=7*7*64)
+            tf.get_variable("W2",shape=[7*7*64,1])
+            tf.get_variable("b2",shape=1)
 
         with tf.variable_scope("generator"):
-            W1=tf.get_variable("W1",shape=[self.HParams.noise_dim,1024])
-            b1=tf.get_variable("b1",shape=1024)
-            W2=tf.get_variable("W2",shape=[1024,7*7*128])
-            b2=tf.get_variable("b2",shape=7*7*128)
-            W1_deconv=tf.get_variable("W1_deconv",shape=[4,4,64,128])
-            b1_deconv=tf.get_variable("b1_deconv",shape=64)
-            W2_deconv=tf.get_variable("W2_deconv",shape=[4,4,1,64])
-            b2_deconv=tf.get_variable("b2_deconv",shape=1)
+            tf.get_variable("W1",shape=[self.HParams.noise_dim,1024])
+            tf.get_variable("b1",shape=1024)
+            tf.get_variable("W2",shape=[1024,7*7*128])
+            tf.get_variable("b2",shape=7*7*128)
+            tf.get_variable("W1_deconv",shape=[4,4,64,128])
+            tf.get_variable("b1_deconv",shape=64)
+            tf.get_variable("W2_deconv",shape=[4,4,1,64])
+            tf.get_variable("b2_deconv",shape=1)
         self.logits_real = self.discriminator(preprocess_img(self.Input_img))
         self.Input_fake_img = self.generator()
 
         self.logits_fake = self.discriminator(self.Input_fake_img)
-        # with tf.variable_scope("") as scope:
-        #     self.logits_real = self.discriminator(preprocess_img(self.Input_img))
-        #     scope.reuse_variables()
-        #     self.logits_fake = self.discriminator(self.Input_fake_img)
         self.output_fake_img = self.output_generator()
-        self.get_gan_loss()
-        #self.get_ls_gan_loss()
+        self.get_wganp_loss()
         self.get_optimizer()
         self.get_train_op()
 
@@ -60,7 +56,7 @@ class SGAN(object):
         a5 = tf.reshape(a4, [-1, 7, 7, 128])
         a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 14, 14, 64]) + b1_deconv)#[-1,14,14,64]
-        a6=a6+tf.layers.dropout(self.da2,0.3)
+        a6=a6+tf.layers.dropout(self.da1,0.3)
         a7 = tf.layers.batch_normalization(a6, training=True)
         a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a7, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a7)[0], 28, 28, 1]) + b2_deconv)
@@ -105,8 +101,8 @@ class SGAN(object):
             W2 = tf.get_variable("W2")
             b2 = tf.get_variable("b2")
         x=tf.reshape(x,[-1,28,28,1])
-        da1 = tf.nn.leaky_relu(tf.nn.conv2d(x, W1_conv, strides=[1, 2, 2, 1], padding='SAME') + b1_conv)#[-1,14,14,64]
-        da2 = tf.nn.leaky_relu(tf.nn.conv2d(da1, W2_conv, strides=[1, 1, 1, 1], padding='SAME') + b2_conv)#[-1,7,7,128]
+        self.da1 = tf.nn.leaky_relu(tf.nn.conv2d(x, W1_conv, strides=[1, 2, 2, 1], padding='SAME') + b1_conv)#[-1,14,14,64]
+        da2 = tf.nn.leaky_relu(tf.nn.conv2d(self.da1, W2_conv, strides=[1, 1, 1, 1], padding='SAME') + b2_conv)#[-1,7,7,128]
         da3=tf.layers.batch_normalization(da2)
         da4= tf.reshape(da3, [-1, 7 * 7 * 64])
         da5 = tf.nn.leaky_relu(tf.matmul(da4, W1) + b1)
@@ -138,7 +134,7 @@ class SGAN(object):
         self.G_train_step=self.G_solver.minimize(self.G_loss,var_list=G_vars)
 
     def train_Discriminator(self,sess,minibatch):
-        _,d_loss_curr=sess.run([self.D_train_step,self.D_loss,self.D_clip],feed_dict={self.Input_img:minibatch})
+        _,d_loss_curr,_=sess.run([self.D_train_step,self.D_loss,self.D_clip],feed_dict={self.Input_img:minibatch})
         return d_loss_curr
 
     def train_Generator(self,sess,minibatch):

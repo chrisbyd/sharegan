@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from sgan import SGAN,HParams
+from wasgan import WSGAN
 from utility import *
 from tensorflow.examples.tutorials.mnist import input_data
 import matplotlib
@@ -13,6 +14,7 @@ NUM_EPOCHES=10
 PRINT_INTERVAL=50
 LEARNING_RATE=1e-3
 NUM_K=1
+GAN=1
 
 def constructParams():
     return HParams(
@@ -25,7 +27,10 @@ def constructParams():
 
 mnist=input_data.read_data_sets("./data/",one_hot=False)
 hparams=constructParams()
-sgan=SGAN(hparams=hparams)
+if GAN ==0:
+    sgan=SGAN(hparams=hparams)
+elif GAN ==1:
+    sgan=WSGAN(hparams=hparams)
 max_iter=int(mnist.train.num_examples*NUM_EPOCHES/BATCH_SIZE)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
