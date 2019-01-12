@@ -257,7 +257,7 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss,
     """
     # compute the number of iterations we need
     max_iter = int(mnist.train.num_examples * num_epoch / batch_size)
-    for it in range(5000):
+    for it in range(2000):
         # every show often, show a sample result
 
         # run a batch of data through the network
@@ -273,9 +273,9 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss,
         # if gan loss is small we tried to learn the mapping
         if (random.random()*5 > G_loss_curr ):
             _, L_loss_cur = sess.run([L_train_step, L_loss], feed_dict={x: minibatch})
-
+        #
         else:
-            # other wise let learner tell us how to generate
+        #     # other wise let learner tell us how to generate
             _, S_loss_cur = sess.run([S_train_step, S_loss], feed_dict={x: minibatch})
 
         # print loss every so often.
@@ -309,7 +309,7 @@ with tf.variable_scope("") as scope:
     logits_fake, dis_hidden_layer_fake = discriminator(G_sample)
 
     # get output of the learner
-    approx_gen_hidden = learner(dis_hidden_layer_fake)
+    approx_gen_hidden = learner(dis_hidden_layer_real)
 
 
 # Get the list of variables for the discriminator and generator
