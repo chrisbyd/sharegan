@@ -4,6 +4,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import random
 
 plt.rcParams['figure.figsize'] = (10.0, 8.0) # set default size of plots
 plt.rcParams['image.interpolation'] = 'nearest'
@@ -112,6 +113,21 @@ def gan_loss(logits_real, logits_fake):
 
     return D_loss, G_loss
 
+def share_gen_loss(should_gen_layer, gen_layer):
+    """Compute the gen hidden loss given the gen loss
+    :param should_gen_layer: Tensor, shape [batch_size, ???], output of discriminator
+    :param gen_layer: Tensor, shape[batch_size, ???]
+    :return:
+    """
+    return tf.reduce_sum(tf.square(should_gen_layer - gen_layer))
+
+
+def learner_loss(should_output, real_output):
+    # should output is the mapping dis to gen
+    # real output should be gen real output
+    # have the shape of (None, 28, 28, 2)
+    return tf.reduce_sum(tf.square(should_output - real_output))
+
 
 def get_solvers(learning_rate=1e-3, beta1=0.5):
     """Create solvers for GAN training.
@@ -126,7 +142,9 @@ def get_solvers(learning_rate=1e-3, beta1=0.5):
     """
     D_solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1)
     G_solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1)
-    return D_solver, G_solver
+    L_solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1)
+    S_solver = tf.train.AdamOptimizer(learning_rate=learning_rate, beta1=beta1)
+    return D_solver, G_solver, L_solver, S_solver
 
 
 def discriminator(x):
@@ -152,14 +170,16 @@ def discriminator(x):
         b2 = tf.get_variable('b2', shape=1)
         X = tf.reshape(x, [-1, 28, 28, 1])
         a1 = leaky_relu(tf.nn.conv2d(X, W1_conv, strides=[1, 1, 1, 1], padding='VALID') + b1_conv)
-        a2 = tf.nn.max_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+        a2 = tf.nn.max_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID', name="share")
+
         a3 = leaky_relu(tf.nn.conv2d(a2, W2_conv, strides=[1, 1, 1, 1], padding='VALID') + b2_conv)
         a4 = tf.nn.max_pool(a3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
         a5 = tf.reshape(a4, [-1, 4 * 4 * 64])
         a6 = leaky_relu(tf.matmul(a5, W1) + b1)
         a7 = tf.matmul(a6, W2) + b2
         logits = a7
-        return logits
+
+        return logits, a3
 
 
 def generator(z):
@@ -196,7 +216,7 @@ def generator(z):
         a3 = tf.nn.relu(tf.matmul(a2, W2) + b2)
         #         m2, v2 = tf.nn.moments(a3, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a4 = tf.nn.batch_normalization(a3, m2, v2, o2, s2, 1e-6)
-        a4 = tf.layers.batch_normalization(a3, training=True)
+        a4 = tf.layers.batch_normalization(a3, training=True, name="share")
         a5 = tf.reshape(a4, [-1, 7, 7, 128])
         a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 14, 14, 64]) + b1_deconv)
@@ -207,11 +227,18 @@ def generator(z):
                                                output_shape=[tf.shape(a7)[0], 28, 28, 1]) + b2_deconv)
         a9 = tf.reshape(a8, [-1, 28 * 28])
         img = a9
+        return img, a4
 
-        return img
 
+def learner(hidden):
+    # hidden layer of dis
+    # mapping from None, 8, 8, 64 -> 6272
+    with tf.variable_scope("learner1", reuse=tf.AUTO_REUSE):
+        reg = tf.reshape(hidden, [-1, 4096])
+        h1 = tf.layers.dense(reg, units=128, activation=tf.sigmoid)
+        return tf.layers.dense(h1, units=6272, activation=tf.nn.leaky_relu)
 
-def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss, \
+def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss, L_train_step, S_train_step,
               show_every=250, print_every=50, batch_size=128, num_epoch=2):
     """Train a GAN for a certain number of epochs.
 
@@ -223,12 +250,14 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss, \
     - D_loss: Discriminator loss
     - G_extra_step: A collection of tf.GraphKeys.UPDATE_OPS for generator
     - D_extra_step: A collection of tf.GraphKeys.UPDATE_OPS for discriminator
+    - L_loss: Learner loss mapping from discriminator to gen hidden layer
+    - S_loss: inner hidden layer loss
     Returns:
         Nothing
     """
     # compute the number of iterations we need
     max_iter = int(mnist.train.num_examples * num_epoch / batch_size)
-    for it in range(400):
+    for it in range(5000):
         # every show often, show a sample result
 
         # run a batch of data through the network
@@ -236,14 +265,27 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss, \
         _, D_loss_curr = sess.run([D_train_step, D_loss], feed_dict={x: minibatch})
         _, G_loss_curr = sess.run([G_train_step, G_loss])
 
+
+
+        # generator have smaller loss
+        L_loss_cur, S_loss_cur = -1.0, -1.0
+
+        # if gan loss is small we tried to learn the mapping
+        if (random.random()*5 > G_loss_curr ):
+            _, L_loss_cur = sess.run([L_train_step, L_loss], feed_dict={x: minibatch})
+
+        else:
+            # other wise let learner tell us how to generate
+            _, S_loss_cur = sess.run([S_train_step, S_loss], feed_dict={x: minibatch})
+
         # print loss every so often.
         # We want to make sure D_loss doesn't go to 0
         if it % print_every == 0:
-            print('Iter: {}, D: {:.4}, G:{:.4}'.format(it, D_loss_curr, G_loss_curr))
+            print('Iter: {}, D: {:.4}, G:{:.4}, L:{:.4}, S:{:.4}'.format(it, D_loss_curr, G_loss_curr, L_loss_cur, S_loss_cur))
     print('Final images')
     samples = sess.run(G_sample)
 
-    fig = show_images(samples[:16])
+    fig = show_images(samples[:64])
     plt.show()
 
 
@@ -257,23 +299,33 @@ noise_dim = 96
 x = tf.placeholder(tf.float32, [None, 784])
 z = sample_noise(batch_size, noise_dim)
 # generated images
-G_sample = generator(z)
+G_sample, real_gen_hidden_layer = generator(z)
 
 with tf.variable_scope("") as scope:
     # scale images to be -1 to 1
-    logits_real = discriminator(preprocess_img(x))
+    logits_real, dis_hidden_layer_real = discriminator(preprocess_img(x))
     # Re-use discriminator weights on new inputs
     scope.reuse_variables()
-    logits_fake = discriminator(G_sample)
+    logits_fake, dis_hidden_layer_fake = discriminator(G_sample)
+
+    # get output of the learner
+    approx_gen_hidden = learner(dis_hidden_layer_fake)
+
 
 # Get the list of variables for the discriminator and generator
 D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator1')
 G_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator1')
-
-D_solver, G_solver = get_solvers()
+L_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "learner1")
+D_solver, G_solver, L_solver, S_solver = get_solvers()
 D_loss, G_loss = gan_loss(logits_real, logits_fake)
+L_loss = learner_loss(approx_gen_hidden, real_gen_hidden_layer)
+S_loss = share_gen_loss(approx_gen_hidden, real_gen_hidden_layer)
 D_train_step = D_solver.minimize(D_loss, var_list=D_vars)
 G_train_step = G_solver.minimize(G_loss, var_list=G_vars)
+L_train_step = L_solver.minimize(L_loss, var_list=L_vars)
+S_train_step = S_solver.minimize(S_loss, var_list=G_vars)
+
+
 with get_session() as sess:
     sess.run(tf.global_variables_initializer())
-    run_a_gan(sess,G_train_step,G_loss,D_train_step,D_loss)
+    run_a_gan(sess,G_train_step, G_loss, D_train_step, D_loss, L_loss, S_loss, L_train_step, S_train_step)
