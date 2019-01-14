@@ -10,6 +10,7 @@ plt.rcParams['figure.figsize'] = (10.0, 8.0) # set default size of plots
 plt.rcParams['image.interpolation'] = 'nearest'
 plt.rcParams['image.cmap'] = 'gray'
 
+batch_size = 128
 # A bunch of utility functions
 
 def show_images(images):
@@ -200,6 +201,9 @@ def generator(z):
         #         o1 = tf.get_variable('o1', shape=[1024]) # batch-norm offset parameter
         W2 = tf.get_variable('W2', shape=[1024, 7 * 7 * 128])
         b2 = tf.get_variable('b2', shape=7 * 7 * 128)
+
+        W3 = tf.get_variable('W3', shape=[1024, 7 * 7 * 128])
+        b3 = tf.get_variable('b3', shape=7 * 7 * 128)
         #         s2 = tf.get_variable('s2', shape=[7*7*128]) # batch-norm scale parameter
         #         o2 = tf.get_variable('o2', shape=[7*7*128]) # batch-norm offset parameter
         W1_deconv = tf.get_variable('W1_deconv', shape=[4, 4, 64, 128])
@@ -214,10 +218,13 @@ def generator(z):
         #         a2 = tf.nn.batch_normalization(a1, m1, v1, o1, s1, 1e-6)
         a2 = tf.layers.batch_normalization(a1, training=True)
         a3 = tf.nn.relu(tf.matmul(a2, W2) + b2)
+        ax = tf.nn.relu(tf.matmul(a2, W3) + b3)
         #         m2, v2 = tf.nn.moments(a3, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a4 = tf.nn.batch_normalization(a3, m2, v2, o2, s2, 1e-6)
-        a4 = tf.layers.batch_normalization(a3, training=True, name="share")
-        a5 = tf.reshape(a4, [-1, 7, 7, 128])
+        a4 = tf.layers.batch_normalization(a3, training=True)
+        a4x = tf.layers.batch_normalization(ax, training=True, name="share")
+
+        a5 = tf.reshape(a4+a4x, [-1, 7, 7, 128])
         a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 14, 14, 64]) + b1_deconv)
         #         mdc1, vdc1 = tf.nn.moments(a6, axes=[0], keep_dims=False) # mean and var for batch-norm
@@ -227,7 +234,7 @@ def generator(z):
                                                output_shape=[tf.shape(a7)[0], 28, 28, 1]) + b2_deconv)
         a9 = tf.reshape(a8, [-1, 28 * 28])
         img = a9
-        return img, a4
+        return img, a4x
 
 
 def learner(hidden):
@@ -257,7 +264,7 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss,
     """
     # compute the number of iterations we need
     max_iter = int(mnist.train.num_examples * num_epoch / batch_size)
-    for it in range(2000):
+    for it in range(450):
         # every show often, show a sample result
 
         # run a batch of data through the network
@@ -271,7 +278,7 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss,
         L_loss_cur, S_loss_cur = -1.0, -1.0
 
         # if gan loss is small we tried to learn the mapping
-        if (random.random()*5 > G_loss_curr ):
+        if (random.random()*2 < D_loss_curr ):
             _, L_loss_cur = sess.run([L_train_step, L_loss], feed_dict={x: minibatch})
         #
         else:
@@ -291,7 +298,7 @@ def run_a_gan(sess, G_train_step, G_loss, D_train_step, D_loss,  L_loss, S_loss,
 
 tf.reset_default_graph()
 
-batch_size = 128
+
 # our noise dimension
 noise_dim = 96
 
