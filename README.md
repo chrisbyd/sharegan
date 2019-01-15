@@ -1,2 +1,2 @@
 # sharegan
-lll
+python gan.py --

@@ -1,12 +1,9 @@
-import tensorflow as tf
-import numpy as np
-from sgan import SGAN,HParams
-from wasgan import WSGAN
-from utility import *
 from tensorflow.examples.tutorials.mnist import input_data
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+
+from model.sgan import SGAN, HParams
+from model.wasgan import WSGAN
+from utility import *
+
 SHOW_INTERVAL=100
 BATCH_SIZE=128
 NOISE_DIM=96

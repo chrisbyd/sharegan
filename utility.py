@@ -13,7 +13,7 @@ def show_images(images):
     sqrtn = int(np.ceil(np.sqrt(images.shape[0])))
     sqrtimg = int(np.ceil(np.sqrt(images.shape[1])))
 
-    fig = plt.figure(figsize=(sqrtn, sqrtn))
+    plt.figure(figsize=(4, 4))
     gs = gridspec.GridSpec(sqrtn, sqrtn)
     gs.update(wspace=0.05, hspace=0.05)
 
@@ -24,6 +24,7 @@ def show_images(images):
         ax.set_yticklabels([])
         ax.set_aspect('equal')
         plt.imshow(img.reshape([sqrtimg,sqrtimg]))
+    plt.show()
     return
 
 def preprocess_img(x):
