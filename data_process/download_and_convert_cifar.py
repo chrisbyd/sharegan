@@ -25,7 +25,7 @@ The script should take several minutes to run.
 import pickle
 import os
 import sys
-sys.path.append("/Users/chris/PycharmProjects/ShareGan")
+sys.path.append("/home/chris/research_work/sharegan")
 import numpy as np
 import tensorflow as tf
 from data_process import data_utils

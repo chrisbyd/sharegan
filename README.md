@@ -1,2 +1,2 @@
 # sharegan
-python gan.py --
+python gan.py --model_name
