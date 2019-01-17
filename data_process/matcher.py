@@ -8,10 +8,8 @@ def load_dataset(split,batch_size,dataset,size):
             raise ValueError("CIFAR is only avaliable in 32")
         images,_,init_fn=cifar.load_dataset(split,batch_size,dataset)
     elif dataset == 'mnist':
-        images,_,_init_fn=cifar.load_dataset(split,batch_size,dataset)
+        images,_,init_fn=mnist.load_dataset(split,batch_size,dataset)
     else:
         raise NotImplementedError
     return images,init_fn
 
-if __name__ =='__main__':
-    load_dataset(128,'cifar10',32)

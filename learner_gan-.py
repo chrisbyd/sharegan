@@ -52,7 +52,7 @@ def get_session():
     return session
 
 from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets('./data/', one_hot=False)
+mnist = input_data.read_data_sets('./datasets/mnist/', one_hot=False)
 
 # show a batch
 show_images(mnist.train.next_batch(16)[0])

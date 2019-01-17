@@ -18,6 +18,7 @@ class SGAN(object):
     def __init__(self,hparams):
         self.HParams=hparams
         self.Input_img=tf.placeholder(tf.float32,[self.HParams.batch_size,self.HParams.img_dim])
+        #self.Input_img=input_img
         self.Input_noise=self.sample_noise()
         with tf.variable_scope("discriminator"):
             W1_conv=tf.get_variable("W1_conv",shape=[4,4,1,64])
@@ -167,6 +168,7 @@ class SGAN(object):
 
     def train_Discriminator(self,sess,minibatch):
         _,d_loss_curr=sess.run([self.D_train_step,self.D_loss],feed_dict={self.Input_img:minibatch})
+       # _,d_loss_curr=sess.run([self.D_train_step,self.D_loss])
         return d_loss_curr
 
     def train_Generator(self,sess,minibatch):
