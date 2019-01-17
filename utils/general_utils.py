@@ -17,3 +17,6 @@ def restore_ckpt(ckpt_dir, log, ckpt_number=0, global_step=None):
         log.info("This network is trained from scratch")
 
     return init_assign_op, init_feed_dict
+
+
+
