@@ -1,20 +1,17 @@
-import tensorflow as tf
-import numpy as np
-from sgan import SGAN,HParams
-from wasgan import WSGAN
-from utility import *
 from tensorflow.examples.tutorials.mnist import input_data
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+from data_process import matcher
+from model.sgan import SGAN, HParams
+from model.wasgan import WSGAN
+from utility import *
+
 SHOW_INTERVAL=100
 BATCH_SIZE=128
 NOISE_DIM=96
 NUM_EPOCHES=10
 PRINT_INTERVAL=50
-LEARNING_RATE=0.00005
+LEARNING_RATE=0.001
 NUM_K=5
-GAN=1
+GAN=0
 
 def constructParams():
     return HParams(
@@ -25,7 +22,8 @@ def constructParams():
        beta1=0.5
     )
 
-mnist=input_data.read_data_sets("./data/",one_hot=False)
+mnist=input_data.read_data_sets("./datasets/mnist/",one_hot=False)
+# real_images,iter_fn=matcher.load_dataset('train',88,'mnist',32)
 hparams=constructParams()
 if GAN ==0:
     sgan=SGAN(hparams=hparams)
