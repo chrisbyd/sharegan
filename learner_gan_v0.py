@@ -39,12 +39,22 @@ def show_images(images):
 
 
 def preprocess_img(x):
-    return 2 * x - 1.0
+    return x # return 2 * x - 1.0
 
 
 def damage_img(x):
-    noise = tf.random_normal(shape=tf.shape(x), mean=0.0, stddev=0.2, dtype=tf.float32)
-    return x + noise
+    shp = 10
+    noise = np.random.normal(0, 0.1, BATCH_SIZE* shp*shp*3)
+    noise = noise.reshape([-1, shp, shp, 3])
+    xstart = np.random.randint(0, 32-shp-1)
+    ystart = np.random.randint(0, 32-shp-1)
+    print(xstart, ystart)
+    blank = np.zeros(BATCH_SIZE*32*32*3).reshape([-1, 32, 32, 3])
+    part = blank[:, xstart:xstart+shp, ystart:ystart+shp, :]  
+    print(blank.shape,  part.shape)
+    
+    part +=  noise 
+    return x + blank
 
 
 def deprocess_img(x):
@@ -277,6 +287,7 @@ def generate_customized(shared_category):
 
 def run_a_gan(
         sess,
+        refine_graph,
         noisy_graph,
         D_train_step, D_loss,
         D_train_step2, D_noise_loss,
@@ -315,33 +326,39 @@ def run_a_gan(
         iter = next_batch(images)
 
         # show a batch
-        show_images(next(iter))
-        for it in range(100):
+        
+        for it in range(1000):
             # every show often, show a sample result
 
             # run a batch of data through the network
             minibatch = next(iter)
             # print('123', minibatch.shape)
-            _, D_loss_curr = sess.run([D_train_step, D_loss], feed_dict={x: minibatch})
-            _, C_loss_cur = sess.run([C_train_step, C_loss], feed_dict={x: minibatch})
-            _, R_loss_curr = sess.run([R_train_step, R_loss], feed_dict={x: minibatch})
-            _, U_loss_curr = sess.run([U_train_step, U_loss], feed_dict={x: minibatch})
-            _, D_noise_loss_curr = sess.run([D_train_step2, D_noise_loss], feed_dict={x: minibatch})
+            D_loss_cur, C_loss_cur, R_loss_cur, U_loss_cur, D_noise_loss_cur = sess.run([D_loss, C_loss, R_loss, U_loss, D_noise_loss], feed_dict={x: minibatch}) 
+            _, _, _, _, _ = sess.run([D_train_step, C_train_step, R_train_step, U_train_step, D_train_step2], feed_dict={x: minibatch})
+            #_, D_loss_cur = sess.run([D_train_step, D_loss], feed_dict={x: minibatch})
+            #_, C_loss_cur = sess.run([C_train_step, C_loss], feed_dict={x: minibatch})
+            #_, R_loss_curr = sess.run([R_train_step, R_loss], feed_dict={x: minibatch})
+            #_, U_loss_curr = sess.run([U_train_step, U_loss], feed_dict={x: minibatch})
+            #_, D_noise_loss_curr = sess.run([D_train_step2, D_noise_loss], feed_dict={x: minibatch})
 
 
             # print loss every so often.
             # We want to make sure D_loss doesn't go to 0
             if it % print_every == 0:
                 print('Iter: {}, D:{:.4}, DN:{:.4} G:{:.4}, C:{:.4} R:{:.4}'.format(it,
-                                                                                    D_loss_curr,
-                                                                                    D_noise_loss_curr,
-                                                                                    U_loss_curr,
+                                                                                    D_loss_cur,
+                                                                                    D_noise_loss_cur,
+                                                                                    U_loss_cur,
                                                                                     C_loss_cur,
-                                                                                    R_loss_curr))
+                                                                                    R_loss_cur))
         print('Final images')
+        smp = next(iter)
+        show_images(smp)
         samples = sess.run(G_sample)
-        show_images(sess.run(noisy_graph, feed_dict={x: next(iter)})[:64])
-
+        noise_image = sess.run(noisy_graph, feed_dict={x: smp})
+        refines_image = sess.run(refine_graph, feed_dict={x: smp})
+        show_images(noise_image[:64])
+        show_images(refines_image[:64])
         fig = show_images(samples[:64])
         plt.show()
 
@@ -358,13 +375,13 @@ x = tf.placeholder(tf.float32, [None, 32, 32, 3])
 z = sample_noise(BATCH_SIZE, noise_dim)
 r = tf.placeholder(tf.float32, [None])
 
-with tf.variable_scope("") as scope:
+with tf.variable_scope("", reuse=tf.AUTO_REUSE) as scope:
     # scale images to be -1 to 1
     logits_real, dis_cat_layer_real = discriminator(preprocess_img(x))
 
     # use noise not to let the dis downgrade
     noisy_graph = damage_img(preprocess_img(x))
-    logits_fake_little, _ = discriminator(noisy_graph)
+    
 
     # generate category
     category_fake = generate_category(z)
@@ -376,9 +393,10 @@ with tf.variable_scope("") as scope:
     G_sample = generator(z)
 
     # Re-use discriminator weights on new inputs
-    scope.reuse_variables()
+    logits_fake_little, _ = discriminator(noisy_graph) 
+    #scope.reuse_variables()
     logits_refine_fake, _ = discriminator(refine_image)
-    scope.reuse_variables()
+    #scope.reuse_variables()
     logits_fake, _ = discriminator(G_sample)
 
 # Get the list of variables for the discriminator and generator
@@ -390,7 +408,7 @@ D_solver, G_solver, C_solver, R_solver = get_solvers()
 
 # U_loss is customized loss
 D_loss, U_loss = gan_loss(logits_real, logits_fake)
-D_noise_loss, _ = gan_loss(logits_real, logits_fake_little)
+D_noise_loss, _ = gan_loss(logits_fake_little, logits_fake)
 
 # category loss measures distribution difference
 C_loss = share_cat_loss(dis_cat_layer_real, category_fake)
@@ -415,6 +433,7 @@ with get_session() as sess:
     run_a_gan(
         sess,
         refine_image,
+        noisy_graph,
         D_train_step, D_loss,
         D_train_step2, D_noise_loss,
         C_train_step, C_loss,
