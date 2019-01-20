@@ -43,8 +43,8 @@ def preprocess_img(x):
 
 
 def damage_img(x):
-    shp = 10
-    noise = np.random.normal(0, 0.1, BATCH_SIZE* shp*shp*3)
+    shp = 1
+    noise = np.random.normal(0, 1, BATCH_SIZE* shp*shp*3)
     noise = noise.reshape([-1, shp, shp, 3])
     xstart = np.random.randint(0, 32-shp-1)
     ystart = np.random.randint(0, 32-shp-1)
@@ -112,7 +112,14 @@ def sample_noise(batch_size, dim):
     TensorFlow Tensor containing uniform noise in [-1, 1] with shape [batch_size, dim]
     """
     # TODO: sample and return noise
-    return tf.random_uniform([batch_size, dim], minval=-1, maxval=1)
+    return np.random.uniform(size=[batch_size, dim], low=-1, high=1)
+
+def wganp_loss(logits_real,logits_fake):
+    D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
+    D_loss=tf.reduce_mean(logits_real)-tf.reduce_mean(logits_fake)
+    G_loss=-tf.reduce_mean(logits_fake)
+    
+    return D_loss,G_loss,D_clip
 
 
 def gan_loss(logits_real, logits_fake):
@@ -149,7 +156,7 @@ def share_cat_loss(dis_cat_layer, gen_cat_layer):
     :param gen_layer: Tensor, shape[batch_size, ???]
     :return:
     """
-    return tf.reduce_mean(tf.square(tf.reduce_mean(dis_cat_layer_real, axis=0) - tf.reduce_mean(gen_cat_layer, axis=0)))
+    return tf.reduce_mean(tf.square(tf.reduce_mean(dis_cat_layer, axis=0) - tf.reduce_mean(gen_cat_layer, axis=0)))
 
 
 def get_solvers(learning_rate=1e-3, beta1=0.5):
@@ -184,27 +191,36 @@ def discriminator(x):
     with tf.variable_scope("discriminator1", reuse=tf.AUTO_REUSE):
         # TODO: implement architecture
 
-        W1_conv = tf.get_variable('W1_conv', shape=[5, 5, 3, 32])
+        W1_conv = tf.get_variable('W1_conv', shape=[3, 3, 3, 32])
         b1_conv = tf.get_variable('b1_conv', shape=32)
-        W2_conv = tf.get_variable('W2_conv', shape=[5, 5, 32, 64])
+        W2_conv = tf.get_variable('W2_conv', shape=[3, 3, 32, 64])
         b2_conv = tf.get_variable('b2_conv', shape=64)
+        W3_conv = tf.get_variable('W3_conv', shape=[4, 4, 64, 64])
+        b3_conv = tf.get_variable('b3_conv', shape=64) 
+        W4_conv = tf.get_variable('W4_conv', shape=[3, 3, 64, 64])
+        b4_conv = tf.get_variable('b4_conv', shape=64) 
         W1 = tf.get_variable('W1', shape=[5 * 5 * 64, CATGORY_INFO])
         b1 = tf.get_variable('b1', shape=CATGORY_INFO)
-        W2 = tf.get_variable('W2', shape=[CATGORY_INFO, 1])
-        b2 = tf.get_variable('b2', shape=1)
+        W2 = tf.get_variable('W2', shape=[CATGORY_INFO, 1], trainable=True, initializer=tf.random_normal_initializer)
+        b2 = tf.get_variable('b2', shape=1, trainable=True, initializer=tf.random_normal_initializer)
         X = tf.reshape(x, [-1, 32, 32, 3])
-        a1 = leaky_relu(tf.nn.conv2d(X, W1_conv, strides=[1, 1, 1, 1], padding='VALID') + b1_conv)
-        a2 = tf.nn.max_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID', name="share")
-
-        a3 = leaky_relu(tf.nn.conv2d(a2, W2_conv, strides=[1, 1, 1, 1], padding='VALID') + b2_conv)
-        a4 = tf.nn.max_pool(a3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
-        a5 = tf.reshape(a4, [-1, CATGORY_INFO])
+        a1 = leaky_relu(tf.nn.conv2d(X, W1_conv, strides=[1, 1, 1, 1], padding='SAME') + b1_conv)
+        a2 = tf.nn.avg_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 16, 16, 32
+        print("a2", a2.shape)
+        a3 = leaky_relu(tf.nn.conv2d(a2, W2_conv, strides=[1, 1, 1, 1], padding='SAME') + b2_conv) 
+        a4 = tf.nn.avg_pool(a3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 8, 8, 64
+        print("a4", a4.shape) 
+        a3x = leaky_relu(tf.nn.conv2d(a4, W3_conv, strides=[1, 1, 1, 1], padding='VALID') + b3_conv) 
+        #a4x = tf.nn.max_pool(a3x, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1], padding='SAME') # 5, 5, 64
+        #a3xx = leaky_relu(tf.nn.conv2d(a4x, W4_conv, strides=[1, 1, 1, 1], padding='VALID') + b4_conv)
+        #a4xx = tf.nn.max_pool(a3xx, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1], padding='SAME')
+        
+        a5 = tf.reshape(a3x, [-1, CATGORY_INFO]) # 25*64
         a6 = leaky_relu(tf.matmul(a5, W1) + b1)
-        category = tf.nn.softmax(a6)
         a7 = tf.matmul(a6, W2) + b2
         logits = a7
-        print('dis', category.shape)
-        return logits, category
+        print('dis', a6.shape)
+        return logits, a6
 
 
 def generator(z):
@@ -222,7 +238,7 @@ def generator(z):
 
 
 def generate_category(z):
-    with tf.variable_scope("generator1-cate", reuse=tf.AUTO_REUSE):
+    with tf.variable_scope("generator1-cat", reuse=tf.AUTO_REUSE):
         # TODO: implement architecture
 
         W1 = tf.get_variable('W1', shape=[z.get_shape()[1], 1024])
@@ -242,6 +258,7 @@ def generate_category(z):
 
 def generate_refinement(shared_category):
     with tf.variable_scope("generator1-ref", reuse=tf.AUTO_REUSE):
+        noise =  tf.random_normal([tf.shape(shared_category)[0], 32*32*3], mean=0, stddev=0.1)
         # mapping category to graph
         W4 = tf.get_variable('W4', shape=[CATGORY_INFO, 8 * 8 * 128])
         b4 = tf.get_variable('b4', shape=8 * 8 * 128)
@@ -250,6 +267,8 @@ def generate_refinement(shared_category):
         #         o2 = tf.get_variable('o2', shape=[7*7*128]) # batch-norm offset parameter
         W1_deconv = tf.get_variable('W1_deconv', shape=[4, 4, 64, 128])
         b1_deconv = tf.get_variable('b1_deconv', shape=64)
+        W3_deconv = tf.get_variable('W3_deconv', shape=[4, 4, 64, 64])
+        b3_deconv = tf.get_variable('b3_deconv', shape=64)
         #         s1_deconv = tf.get_variable('s1_deconv', shape=[14,14,64]) # batch-norm scale parameter
         #         o1_deconv = tf.get_variable('o1_deconv', shape=[14,14,64]) # batch-norm offset parameter
         W2_deconv = tf.get_variable('W2_deconv', shape=[4, 4, 3, 64])
@@ -265,13 +284,18 @@ def generate_refinement(shared_category):
         #         mdc1, vdc1 = tf.nn.moments(a6, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a7 = tf.nn.batch_normalization(a6, mdc1, vdc1, o1_deconv, s1_deconv, 1e-6)
         a7 = tf.layers.batch_normalization(a6, training=True)
-        a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a7, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
+        a7x = tf.nn.relu(tf.nn.conv2d_transpose(a7, W3_deconv, strides=[1, 1, 1, 1], padding='SAME',
+                                               output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b3_deconv)
+        #         mdc1, vdc1 = tf.nn.moments(a6, axes=[0], keep_dims=False) # mean and var for batch-norm
+        #         a7 = tf.nn.batch_normalization(a6, mdc1, vdc1, o1_deconv, s1_deconv, 1e-6)
+        a8x = tf.layers.batch_normalization(a7x, training=True)
+        a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a8x, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
                                                output_shape=[tf.shape(a7)[0], 32, 32, 3]) + b2_deconv)
         a9 = tf.reshape(a8, [-1, 32 * 32 * 3])
         # a10 = (tf.layers.batch_normalization(a9, training=True))
         img = a9
         print('gen', shared_category.shape)
-        return img
+        return img + noise
 
 
 def generate_customized(shared_category):
@@ -289,12 +313,13 @@ def run_a_gan(
         sess,
         refine_graph,
         noisy_graph,
+        D_clip,
         D_train_step, D_loss,
         D_train_step2, D_noise_loss,
         C_train_step, C_loss,
         R_train_step, R_loss,
         U_train_step, U_loss,
-        show_every=250, print_every=50, batch_size=BATCH_SIZE, num_epoch=2):
+        show_every=500, print_every=50, batch_size=BATCH_SIZE, num_epoch=2):
         """Train a GAN for a certain number of epochs.
 
         Inputs:
@@ -327,14 +352,18 @@ def run_a_gan(
 
         # show a batch
         
-        for it in range(1000):
+        for it in range(10000):
+
             # every show often, show a sample result
 
             # run a batch of data through the network
             minibatch = next(iter)
+            z_rand = sample_noise(BATCH_SIZE, noise_dim)
+            
             # print('123', minibatch.shape)
-            D_loss_cur, C_loss_cur, R_loss_cur, U_loss_cur, D_noise_loss_cur = sess.run([D_loss, C_loss, R_loss, U_loss, D_noise_loss], feed_dict={x: minibatch}) 
-            _, _, _, _, _ = sess.run([D_train_step, C_train_step, R_train_step, U_train_step, D_train_step2], feed_dict={x: minibatch})
+            D_loss_cur, C_loss_cur, R_loss_cur, U_loss_cur, D_noise_loss_cur = sess.run([D_loss, C_loss, R_loss, U_loss, D_noise_loss], feed_dict={x: minibatch, z:z_rand}) 
+            _ = sess.run([D_clip, D_train_step, D_train_step2], feed_dict={x: minibatch,z:z_rand}) 
+            #_, _, _, _ = sess.run([D_train_step, C_train_step, R_train_step, U_train_step], feed_dict={x: minibatch,z:z_rand})
             #_, D_loss_cur = sess.run([D_train_step, D_loss], feed_dict={x: minibatch})
             #_, C_loss_cur = sess.run([C_train_step, C_loss], feed_dict={x: minibatch})
             #_, R_loss_curr = sess.run([R_train_step, R_loss], feed_dict={x: minibatch})
@@ -345,22 +374,23 @@ def run_a_gan(
             # print loss every so often.
             # We want to make sure D_loss doesn't go to 0
             if it % print_every == 0:
-                print('Iter: {}, D:{:.4}, DN:{:.4} G:{:.4}, C:{:.4} R:{:.4}'.format(it,
+                print('Iter: {}, D:{:.4}, G:{:.4}, C:{:.4} R:{:.4}'.format(it,
                                                                                     D_loss_cur,
-                                                                                    D_noise_loss_cur,
+                                                                                    #D_noise_loss_cur,
                                                                                     U_loss_cur,
                                                                                     C_loss_cur,
                                                                                     R_loss_cur))
-        print('Final images')
-        smp = next(iter)
-        show_images(smp)
-        samples = sess.run(G_sample)
-        noise_image = sess.run(noisy_graph, feed_dict={x: smp})
-        refines_image = sess.run(refine_graph, feed_dict={x: smp})
-        show_images(noise_image[:64])
-        show_images(refines_image[:64])
-        fig = show_images(samples[:64])
-        plt.show()
+            if it % show_every == 0:    #print('Final images')
+                smp = next(iter)
+                z_rand = sample_noise(BATCH_SIZE, noise_dim)
+                #show_images(smp)
+                samples = sess.run(G_sample, feed_dict={z: z_rand})
+                noise_image = sess.run(noisy_graph, feed_dict={x: smp, z:z_rand})
+                refines_image = sess.run(refine_graph, feed_dict={x: smp, z: z_rand})
+                show_images(noise_image[:64])
+                show_images(refines_image[:64])
+                #fig = show_images(samples[:64])
+                plt.show()
 
 
 tf.reset_default_graph()
@@ -371,9 +401,7 @@ noise_dim = 1280
 
 # placeholders for images from the training dataset
 x = tf.placeholder(tf.float32, [None, 32, 32, 3])
-
-z = sample_noise(BATCH_SIZE, noise_dim)
-r = tf.placeholder(tf.float32, [None])
+z = tf.placeholder(tf.float32, [None, noise_dim])
 
 with tf.variable_scope("", reuse=tf.AUTO_REUSE) as scope:
     # scale images to be -1 to 1
@@ -404,15 +432,17 @@ D_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator1')
 C_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator1-cat')
 U_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator1-cust')
 R_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator1-ref')
-D_solver, G_solver, C_solver, R_solver = get_solvers()
+D_solver, U_solver, C_solver, R_solver = get_solvers()
+D_clip=[p.assign(tf.clip_by_value(p,-0.01,0.01)) for p in D_vars]
 
 # U_loss is customized loss
-D_loss, U_loss = gan_loss(logits_real, logits_fake)
-D_noise_loss, _ = gan_loss(logits_fake_little, logits_fake)
+_, U_loss = gan_loss(logits_real, logits_fake)
+D_loss, R_loss = gan_loss(logits_real, logits_refine_fake)
+D_noise_loss, _ = gan_loss(logits_fake_little, logits_refine_fake)
 
 # category loss measures distribution difference
 C_loss = share_cat_loss(dis_cat_layer_real, category_fake)
-_, R_loss = gan_loss(logits_real, logits_refine_fake)
+#_, R_loss = gan_loss(logits_real, logits_refine_fake)
 
 # dis variables
 D_train_step = D_solver.minimize(D_loss, var_list=D_vars)
@@ -420,7 +450,7 @@ D_train_step = D_solver.minimize(D_loss, var_list=D_vars)
 D_train_step2 = D_solver.minimize(D_noise_loss, var_list=D_vars)
 
 # customized layer is responsible for total loss
-U_train_step = G_solver.minimize(U_loss, var_list=U_vars)
+U_train_step = U_solver.minimize(U_loss, var_list=U_vars)
 
 # category layer
 C_train_step = C_solver.minimize(C_loss, var_list=C_vars)
@@ -434,6 +464,7 @@ with get_session() as sess:
         sess,
         refine_image,
         noisy_graph,
+        D_clip,
         D_train_step, D_loss,
         D_train_step2, D_noise_loss,
         C_train_step, C_loss,
