@@ -52,7 +52,6 @@ def damage_img(x):
     blank = np.zeros(BATCH_SIZE*32*32*3).reshape([-1, 32, 32, 3])
     part = blank[:, xstart:xstart+shp, ystart:ystart+shp, :]  
     print(blank.shape,  part.shape)
-    
     part +=  noise 
     return x + blank
 
@@ -158,6 +157,18 @@ def share_cat_loss(dis_cat_layer, gen_cat_layer):
     """
     return tf.reduce_mean(tf.square(tf.reduce_mean(dis_cat_layer, axis=0) - tf.reduce_mean(gen_cat_layer, axis=0)))
 
+def get_optimizer(name,optimizer='adam',learning_rate=1,beta1=0.0,beta2=0.9):
+    decay = 1.0
+    lr=learning_rate*decay
+    #tf.summary.scalar(name+'+learning_rate',lr)
+    if optimizer=='adam':
+        return tf.train.AdamOptimizer(lr,beta1=beta1,beta2=beta2)
+    elif optimizer=='rmsprop':
+        return tf.train.RMSPropOptimizer(lr,decay=0.99)
+    elif optimizer=='sgd':
+        return tf.train.GradientDescentOptimizer(lr)
+    else:
+        raise NotImplementedError
 
 def get_solvers(learning_rate=1e-3, beta1=0.5):
     """Create solvers for GAN training.
@@ -198,24 +209,31 @@ def discriminator(x):
         W3_conv = tf.get_variable('W3_conv', shape=[4, 4, 64, 64])
         b3_conv = tf.get_variable('b3_conv', shape=64) 
         W4_conv = tf.get_variable('W4_conv', shape=[3, 3, 64, 64])
-        b4_conv = tf.get_variable('b4_conv', shape=64) 
-        W1 = tf.get_variable('W1', shape=[5 * 5 * 64, CATGORY_INFO])
+        b4_conv = tf.get_variable('b4_conv', shape=64)
+        W5_conv = tf.get_variable('W5_conv', shape=[3, 3, 64, 64])
+        b5_conv = tf.get_variable('b5_conv', shape=64)
+        W6_conv = tf.get_variable('W6_conv', shape=[3, 3, 64, 64])
+        b6_conv = tf.get_variable('b6_conv', shape=64)
+        W1 = tf.get_variable('W1', shape=[8 * 8 * 64, CATGORY_INFO])
         b1 = tf.get_variable('b1', shape=CATGORY_INFO)
         W2 = tf.get_variable('W2', shape=[CATGORY_INFO, 1], trainable=True, initializer=tf.random_normal_initializer)
         b2 = tf.get_variable('b2', shape=1, trainable=True, initializer=tf.random_normal_initializer)
         X = tf.reshape(x, [-1, 32, 32, 3])
         a1 = leaky_relu(tf.nn.conv2d(X, W1_conv, strides=[1, 1, 1, 1], padding='SAME') + b1_conv)
-        a2 = tf.nn.avg_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 16, 16, 32
+        a2 = tf.nn.max_pool(a1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 16, 16, 32
         print("a2", a2.shape)
         a3 = leaky_relu(tf.nn.conv2d(a2, W2_conv, strides=[1, 1, 1, 1], padding='SAME') + b2_conv) 
-        a4 = tf.nn.avg_pool(a3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 8, 8, 64
+        a4 = tf.nn.max_pool(a3, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME') # 8, 8, 64
         print("a4", a4.shape) 
-        a3x = leaky_relu(tf.nn.conv2d(a4, W3_conv, strides=[1, 1, 1, 1], padding='VALID') + b3_conv) 
+        a5 = leaky_relu(tf.nn.conv2d(a4, W3_conv, strides=[1, 1, 1, 1], padding='SAME') + b3_conv)#-1,8,8,64
         #a4x = tf.nn.max_pool(a3x, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1], padding='SAME') # 5, 5, 64
         #a3xx = leaky_relu(tf.nn.conv2d(a4x, W4_conv, strides=[1, 1, 1, 1], padding='VALID') + b4_conv)
         #a4xx = tf.nn.max_pool(a3xx, ksize=[1, 2, 2, 1], strides=[1, 1, 1, 1], padding='SAME')
-        
-        a5 = tf.reshape(a3x, [-1, CATGORY_INFO]) # 25*64
+        a6=leaky_relu(tf.nn.conv2d(a5,W4_conv,strides=[1,1,1,1],padding='SAME')+b4_conv)
+        a7 = leaky_relu(tf.nn.conv2d(a6, W5_conv, strides=[1, 1, 1, 1], padding='SAME') + b5_conv)
+        a8 = leaky_relu(tf.nn.conv2d(a7, W6_conv, strides=[1, 1, 1, 1], padding='SAME') + b6_conv)
+
+        a5 = tf.reshape(a8, [-1, CATGORY_INFO]) # 8*8*64
         a6 = leaky_relu(tf.matmul(a5, W1) + b1)
         a7 = tf.matmul(a6, W2) + b2
         logits = a7
@@ -240,7 +258,6 @@ def generator(z):
 def generate_category(z):
     with tf.variable_scope("generator1-cat", reuse=tf.AUTO_REUSE):
         # TODO: implement architecture
-
         W1 = tf.get_variable('W1', shape=[z.get_shape()[1], 1024])
         b1 = tf.get_variable('b1', shape=1024)
         #         s1 = tf.get_variable('s1', shape=[1024]) # batch-norm scale parameter
@@ -248,11 +265,11 @@ def generate_category(z):
         W2 = tf.get_variable('W2', shape=[1024, CATGORY_INFO])
         b2 = tf.get_variable('b2', shape=CATGORY_INFO)
 
-        a1 = tf.nn.relu(tf.matmul(z, W1) + b1)
+    a1 = tf.nn.relu(tf.matmul(z, W1) + b1)
         #         m1, v1 = tf.nn.moments(a1, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a2 = tf.nn.batch_normalization(a1, m1, v1, o1, s1, 1e-6)
-        a2 = tf.layers.batch_normalization(a1, training=True)
-        a3 = tf.nn.relu(tf.matmul(a2, W2) + b2)
+    a2 = tf.layers.batch_normalization(a1, training=True)
+    a3 = tf.nn.relu(tf.matmul(a2, W2) + b2)
     return a3
 
 
@@ -260,40 +277,64 @@ def generate_refinement(shared_category):
     with tf.variable_scope("generator1-ref", reuse=tf.AUTO_REUSE):
         noise =  tf.random_normal([tf.shape(shared_category)[0], 32*32*3], mean=0, stddev=0.1)
         # mapping category to graph
-        W4 = tf.get_variable('W4', shape=[CATGORY_INFO, 8 * 8 * 128])
-        b4 = tf.get_variable('b4', shape=8 * 8 * 128)
+        W1 = tf.get_variable('W1', shape=[CATGORY_INFO, 8 * 8 * 128])
+        b1 = tf.get_variable('b1', shape=8 * 8 * 128)
 
         #         s2 = tf.get_variable('s2', shape=[7*7*128]) # batch-norm scale parameter
         #         o2 = tf.get_variable('o2', shape=[7*7*128]) # batch-norm offset parameter
-        W1_deconv = tf.get_variable('W1_deconv', shape=[4, 4, 64, 128])
-        b1_deconv = tf.get_variable('b1_deconv', shape=64)
+        W2_deconv = tf.get_variable('W2_deconv', shape=[4, 4, 64, 128])
+        b2_deconv = tf.get_variable('b2_deconv', shape=64)
         W3_deconv = tf.get_variable('W3_deconv', shape=[4, 4, 64, 64])
         b3_deconv = tf.get_variable('b3_deconv', shape=64)
         #         s1_deconv = tf.get_variable('s1_deconv', shape=[14,14,64]) # batch-norm scale parameter
         #         o1_deconv = tf.get_variable('o1_deconv', shape=[14,14,64]) # batch-norm offset parameter
-        W2_deconv = tf.get_variable('W2_deconv', shape=[4, 4, 3, 64])
-        b2_deconv = tf.get_variable('b2_deconv', shape=1)
+        W4_deconv = tf.get_variable('W4_deconv', shape=[4, 4, 64, 64])
+        b4_deconv = tf.get_variable('b4_deconv', shape=64)
+
+        W5_deconv = tf.get_variable('W5_deconv', shape=[4, 4, 64, 64])
+        b5_deconv = tf.get_variable('b5_deconv', shape=64)
+
+        W6_deconv = tf.get_variable('W6_deconv', shape=[4, 4, 64, 64])
+        b6_deconv = tf.get_variable('b6_deconv', shape=64)
+
+        W7_deconv = tf.get_variable('W7_deconv', shape=[4, 4, 3, 64])
+        b7_deconv = tf.get_variable('b7_deconv', shape=3)
+
 
         #         m2, v2 = tf.nn.moments(a3, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a4 = tf.nn.batch_normalization(a3, m2, v2, o2, s2, 1e-6)
-        a4 = tf.layers.batch_normalization(tf.matmul(shared_category, W4) + b4, training=True, name="share")
+        a4 = tf.layers.batch_normalization(tf.matmul(shared_category, W1) + b1, training=True, name="share")
 
         a5 = tf.reshape(a4, [-1, 8, 8, 128])
-        a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W1_deconv, strides=[1, 2, 2, 1], padding='SAME',
-                                               output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b1_deconv)
+        a6 = tf.nn.relu(tf.nn.conv2d_transpose(a5, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
+                                               output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b2_deconv)
         #         mdc1, vdc1 = tf.nn.moments(a6, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a7 = tf.nn.batch_normalization(a6, mdc1, vdc1, o1_deconv, s1_deconv, 1e-6)
         a7 = tf.layers.batch_normalization(a6, training=True)
-        a7x = tf.nn.relu(tf.nn.conv2d_transpose(a7, W3_deconv, strides=[1, 1, 1, 1], padding='SAME',
+        a8 = tf.nn.relu(tf.nn.conv2d_transpose(a7, W3_deconv, strides=[1, 1, 1, 1], padding='SAME',
                                                output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b3_deconv)
         #         mdc1, vdc1 = tf.nn.moments(a6, axes=[0], keep_dims=False) # mean and var for batch-norm
         #         a7 = tf.nn.batch_normalization(a6, mdc1, vdc1, o1_deconv, s1_deconv, 1e-6)
-        a8x = tf.layers.batch_normalization(a7x, training=True)
-        a8 = tf.nn.tanh(tf.nn.conv2d_transpose(a8x, W2_deconv, strides=[1, 2, 2, 1], padding='SAME',
-                                               output_shape=[tf.shape(a7)[0], 32, 32, 3]) + b2_deconv)
-        a9 = tf.reshape(a8, [-1, 32 * 32 * 3])
+        a9 = tf.layers.batch_normalization(a8, training=True)
+
+        a10 = tf.nn.relu(tf.nn.conv2d_transpose(a9, W4_deconv, strides=[1, 1, 1, 1], padding='SAME',
+                                               output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b4_deconv)
+        a11 = tf.layers.batch_normalization(a10, training=True)
+
+        a12 = tf.nn.relu(tf.nn.conv2d_transpose(a11, W5_deconv, strides=[1, 1, 1, 1], padding='SAME',
+                                                output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b5_deconv)
+        a13 = tf.layers.batch_normalization(a12, training=True)
+
+        a14 = tf.nn.relu(tf.nn.conv2d_transpose(a13, W6_deconv, strides=[1, 1, 1, 1], padding='SAME',
+                                                output_shape=[tf.shape(a5)[0], 16, 16, 64]) + b6_deconv)
+        a15 = tf.layers.batch_normalization(a14, training=True)
+
+
+        a16 = tf.nn.tanh(tf.nn.conv2d_transpose(a15, W7_deconv, strides=[1, 2, 2, 1], padding='SAME',
+                                               output_shape=[tf.shape(a7)[0], 32, 32, 3]) + b7_deconv)
+        a17 = tf.reshape(a16, [-1, 32 * 32 * 3])
         # a10 = (tf.layers.batch_normalization(a9, training=True))
-        img = a9
+        img = a17
         print('gen', shared_category.shape)
         return img + noise
 
