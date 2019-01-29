@@ -46,8 +46,7 @@ def get_generator(input_noise,data_cfg):
                                                          data_cfg.dataset.image_size,
                                                          data_cfg.dataset.image_size,
                                                          data_cfg.dataset.channels])+b2_deconv)
-    a9 = tf.reshape(a8, [-1, data_cfg.dataset.image_size*data_cfg.dataset.image_size*data_cfg.dataset.channels])
-    fake_img = a9
+    fake_img = a8
     return fake_img
 
 

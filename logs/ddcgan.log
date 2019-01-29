@@ -2107,3 +2107,13 @@
 2019-01-17 19:41:20,934 [INFO]: step 100000: gen_loss 3.073889, dis_loss 1.088267 (2106.8 examples/sec; 0.061 sec/batch)
 2019-01-17 19:41:20,934 [INFO]: 0 iterations left,expected to finsh at Y-01-17 19:41:20 (avg speed: 0.062 sec/batch)
 2019-01-17 19:41:21,821 [DEBUG]: Saving checkpoint ...
+2019-01-26 21:52:22,997 [INFO]: start action
+2019-01-26 22:02:37,353 [INFO]: start action
+2019-01-26 22:02:39,684 [INFO]: This network is trained from scratch
+2019-01-26 22:02:40,637 [INFO]: Starting training from step 0...
+2019-01-26 22:02:46,780 [INFO]: step 0: gen_loss 0.754602, dis_loss 1.388968 (20.8 examples/sec; 6.141 sec/batch)
+2019-01-26 22:02:46,780 [INFO]: 100000 iterations left,expected to finsh at Y-02-03 00:40:31 (avg speed: 6.143 sec/batch)
+2019-01-26 22:02:47,276 [DEBUG]: Saving checkpoint ...
+2019-01-26 22:07:40,064 [INFO]: step 100: gen_loss 0.884877, dis_loss 1.294143 (44.9 examples/sec; 2.848 sec/batch)
+2019-01-26 22:07:40,064 [INFO]: 99900 iterations left,expected to finsh at Y-01-30 08:23:45 (avg speed: 2.965 sec/batch)
+2019-01-26 22:11:30,825 [INFO]: Killed by C

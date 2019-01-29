@@ -16,7 +16,9 @@ from model import origin_dcgan
 import data_config as data_cfg
 from evaluation import inception_score
 import viewpics
+from viewpics import image_manifold_size
 from model import deep_dcgan
+sample_dir=os.path.join('./samples',args.model_name,args.dataset)
 logging.config.dictConfig(get_logging_config(args.model_name))
 log=logging.getLogger("gan")
 data_config=data_cfg.get_config(args.dataset)
@@ -120,8 +122,11 @@ def train(train_dir):
                 log.info("%i iterations left,expected to finsh at %s (avg speed: %.3f sec/batch)"
                          %(args.max_iterations-step,end_date.strftime("Y-%m-%d %H:%M:%S"),avg_speed))
             if step %args.view_pic_step ==0:
-                viewpics.view_pics(args,False,generated_img,step)
-                
+                #viewpics.view_pics(args,False,generated_img,step)
+                viewpics.save_images(generated_img,
+                                     image_manifold_size(generated_img.shape[0]),
+                                     '{}/train_{:04d}.png'.format(sample_dir,step))
+
             if step % args.summary_step ==0:
                 summary=tf.Summary()
                 pass
@@ -156,13 +161,13 @@ def gengerate(train_dir,suffix=''):
         for i in range(args.num_generated_batches):
             output_list.append(sess.run(fake_images))
 
-    np.save(os.path.join(DATASETS,args.dataset,"X_gan_%s.npy"%(args.model_name+suffix)),output_list)
+    np.save(os.path.join(DATASETS,args.model_name,args.dataset,"X_gan_%s.npy"%(args.model_name+suffix)),output_list)
 
 
 def get_inception_score():
     datacfg=data_cfg.get_config(args.dataset)
     generated_pics=np.load(os.path.join(DATASETS,args.dataset,'X_gan_%s.npy'%args.model_name))
-    generated_pics=np.reshape(generated_pics,[-1,datacfg.dataset.image_size,datacfg.dataset.image_size,datacfg.dataset.channels])
+    #generated_pics=np.reshape(generated_pics,[-1,datacfg.dataset.image_size,datacfg.dataset.image_size,datacfg.dataset.channels])
     mean,var=inception_score.get_inception_score(generated_pics)
     log.info('the inception score is %s,with d=standard deviation %s'%(mean,var))
 
