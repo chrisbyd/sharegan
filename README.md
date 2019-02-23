@@ -1,2 +1,2 @@
 # sharegan
-python gan.py --model_name
+python gan.py --model_nam='dc_gan'

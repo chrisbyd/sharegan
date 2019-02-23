@@ -1,7 +1,6 @@
 from config_gan import args,get_logging_config
 import sys
-sys.path.append("/Users/chris/PycharmProjects/ShareGan")
-from paths import DATASETS,CKPT_ROOT
+from paths import DATASETS,CKPT_ROOT,SAMPLE
 import logging.config
 import datetime
 import time
@@ -159,7 +158,9 @@ def gengerate(train_dir,suffix=''):
         sess.run(init_assign_op,feed_dict=init_feed_dict)
         output_list=[]
         for i in range(args.num_generated_batches):
-            output_list.append(sess.run(fake_images))
+            output_list.append(sess.run(fake_images)) 
+        output=np.concatenate(output_list,axis=0)
+
 
     np.save(os.path.join(DATASETS,args.model_name,args.dataset,"X_gan_%s.npy"%(args.model_name+suffix)),output_list)
 

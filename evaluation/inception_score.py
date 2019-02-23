@@ -74,3 +74,23 @@ def get_inception_score(images, splits=10):
     mean, std = preds2score(preds, splits)
     print('Inception Score calculation time: %f s' % (time.time() - start_time))
     return mean, std  # Reference values: 11.34 for 49984 CIFAR-10 training set images, or mean=11.31, std=0.08 if in 10 splits.
+
+def denormalize(images):
+  images= (images+1)*127.5
+  images=images.astype(np.uint8)
+  return images
+
+
+denorm=True
+
+datadir='./datasets/cifar10/X_train.npy'
+sampedir='./samples/dcgan/cifar10/X_gan_dcgan_origin.npy'
+if __name__ =='__main__':
+    generated_pics=np.load(sampedir)
+    print(generated_pics.shape)
+    if denorm:
+        generated_pics=denormalize(generated_pics)
+    #generated_pics=np.reshape(generated_pics,[-1,32,32,3])
+    #generated_pics=np.reshape(generated_pics,[-1,datacfg.dataset.image_size,datacfg.dataset.image_size,datacfg.dataset.channels])
+    mean,var=get_inception_score(generated_pics)
+    print('the inception score is %s,with d=standard deviation %s'%(mean,var))

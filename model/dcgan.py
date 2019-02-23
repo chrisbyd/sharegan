@@ -1,3 +1,4 @@
+
 from __future__ import division
 import os
 import time
@@ -35,8 +36,6 @@ class DCGAN(object):
     """
     self.sess = sess
     self.crop = crop
-
-    self.num_generated_batches=500
 
     self.batch_size = batch_size
     self.sample_num = sample_num
@@ -559,30 +558,3 @@ class DCGAN(object):
             while True:
                 for i in range(self.data.shape[0] //self.batch_size):
                     yield self.data[i * self.batch_size: (i + 1) * self.batch_size]
-  
-  def generate_sample_images(self):
-    could_load, checkpoint_counter = self.load(self.checkpoint_dir)
-    if could_load:
-      counter = checkpoint_counter
-      print(" [*] Load SUCCESS")
-    else:
-      print(" [!] Load failed...")
-    
-    sample_dir='../../samples/dcgan/cifar10'
-
-    sample_z = np.random.uniform(-1, 1, size=(self.batch_size , self.z_dim))
-    output_list=[]
-    for i in range(self.num_generated_batches): 
-        samples= self.sess.run(
-              [self.sampler],
-              feed_dict={
-                  self.z: sample_z
-              }
-            )
-        output_list.append(samples)
-    images_tosave=np.concatenate(output_list,axis=0)
-    np.save(os.path.join(sample_dir,'X_gan_dcgan_origin.npy'),images_tosave)
-
-
-
-

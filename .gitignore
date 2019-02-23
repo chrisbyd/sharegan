@@ -3,3 +3,12 @@ __pycache__/
 datasets/
 checkpoints/
 *.gz
+/data/
+/checkpoint/
+samples/
+cifar-10-batches-py/
+logs/
+othermodels/DCGAN-tensorflow/cifar-10-batches-py/
+othermodels/DCGAN-tensorflow/data
+othermodels/DCGAN-tensorflow/samples
+othermodels/DCGAN-tensorflow/checkpoint

@@ -25,7 +25,7 @@ parser.add_argument('--bn_decay',default=0.9,type=float)
 parser.add_argument('--learning_rate',default=1e-3,type=float)
 parser.add_argument('--adam_beta1',default=0.0,type=float)
 parser.add_argument('--adam_beta2',default=0.9,type=float)
-parser.add_argument('--max_iterations',default=100000,type=int)
+parser.add_argument('--max_iterations',default=50000,type=int)
 parser.add_argument('--lr_decay',default=False,action="store_true")
 
 args=parser.parse_args()
